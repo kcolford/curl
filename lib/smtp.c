@@ -133,6 +133,7 @@ const struct Curl_handler Curl_handler_smtp = {
   ZERO_NULL,                        /* connection_check */
   PORT_SMTP,                        /* defport */
   CURLPROTO_SMTP,                   /* protocol */
+  CURLPROTO_SMTP,                   /* family */
   PROTOPT_CLOSEACTION | PROTOPT_NOURLQUERY | /* flags */
   PROTOPT_URLOPTIONS
 };
@@ -160,6 +161,7 @@ const struct Curl_handler Curl_handler_smtps = {
   ZERO_NULL,                        /* connection_check */
   PORT_SMTPS,                       /* defport */
   CURLPROTO_SMTPS,                  /* protocol */
+  CURLPROTO_SMTP,                   /* family */
   PROTOPT_CLOSEACTION | PROTOPT_SSL
   | PROTOPT_NOURLQUERY | PROTOPT_URLOPTIONS /* flags */
 };
@@ -1689,7 +1691,8 @@ static CURLcode smtp_parse_url_path(struct connectdata *conn)
   }
 
   /* URL decode the path and use it as the domain in our EHLO */
-  return Curl_urldecode(conn->data, path, 0, &smtpc->domain, NULL, TRUE);
+  return Curl_urldecode(conn->data, path, 0, &smtpc->domain, NULL,
+                        REJECT_CTRL);
 }
 
 /***********************************************************************
@@ -1707,7 +1710,7 @@ static CURLcode smtp_parse_custom_request(struct connectdata *conn)
 
   /* URL decode the custom request */
   if(custom)
-    result = Curl_urldecode(data, custom, 0, &smtp->custom, NULL, TRUE);
+    result = Curl_urldecode(data, custom, 0, &smtp->custom, NULL, REJECT_CTRL);
 
   return result;
 }
@@ -1759,8 +1762,10 @@ static CURLcode smtp_parse_address(struct connectdata *conn, const char *fqma,
     return CURLE_OUT_OF_MEMORY;
 
   length = strlen(dup);
-  if(dup[length - 1] == '>')
-    dup[length - 1] = '\0';
+  if(length) {
+    if(dup[length - 1] == '>')
+      dup[length - 1] = '\0';
+  }
 
   /* Extract the host name from the address (if we can) */
   host->name = strpbrk(dup, "@");

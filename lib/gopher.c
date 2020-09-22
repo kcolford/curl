@@ -71,6 +71,7 @@ const struct Curl_handler Curl_handler_gopher = {
   ZERO_NULL,                            /* connection_check */
   PORT_GOPHER,                          /* defport */
   CURLPROTO_GOPHER,                     /* protocol */
+  CURLPROTO_GOPHER,                     /* family */
   PROTOPT_NONE                          /* flags */
 };
 
@@ -116,7 +117,7 @@ static CURLcode gopher_do(struct connectdata *conn, bool *done)
     newp += 2;
 
     /* ... and finally unescape */
-    result = Curl_urldecode(data, newp, 0, &sel, &len, FALSE);
+    result = Curl_urldecode(data, newp, 0, &sel, &len, REJECT_ZERO);
     free(gopherpath);
     if(result)
       return result;

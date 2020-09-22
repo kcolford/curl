@@ -83,7 +83,7 @@ struct ssl_backend_data {
   PRFileDesc *handle;
   char *client_nickname;
   struct Curl_easy *data;
-  struct curl_llist obj_list;
+  struct Curl_llist obj_list;
   PK11GenericObject *obj_clicert;
 };
 
@@ -91,14 +91,14 @@ static PRLock *nss_initlock = NULL;
 static PRLock *nss_crllock = NULL;
 static PRLock *nss_findslot_lock = NULL;
 static PRLock *nss_trustload_lock = NULL;
-static struct curl_llist nss_crl_list;
+static struct Curl_llist nss_crl_list;
 static NSSInitContext *nss_context = NULL;
 static volatile int initialized = 0;
 
 /* type used to wrap pointers as list nodes */
 struct ptr_list_wrap {
   void *ptr;
-  struct curl_llist_element node;
+  struct Curl_llist_element node;
 };
 
 struct cipher_s {
@@ -430,7 +430,7 @@ static PK11SlotInfo* nss_find_slot_by_name(const char *slot_name)
 }
 
 /* wrap 'ptr' as list node and tail-insert into 'list' */
-static CURLcode insert_wrapped_ptr(struct curl_llist *list, void *ptr)
+static CURLcode insert_wrapped_ptr(struct Curl_llist *list, void *ptr)
 {
   struct ptr_list_wrap *wrap = malloc(sizeof(*wrap));
   if(!wrap)
@@ -1027,9 +1027,11 @@ static SECStatus BadCertHandler(void *arg, PRFileDesc *sock)
   CERTCertificate *cert;
 
   /* remember the cert verification result */
+#ifndef CURL_DISABLE_PROXY
   if(SSL_IS_PROXY())
     data->set.proxy_ssl.certverifyresult = err;
   else
+#endif
     data->set.ssl.certverifyresult = err;
 
   if(err == SSL_ERROR_BAD_CERT_DOMAIN && !SSL_CONN_CONFIG(verifyhost))
@@ -1553,24 +1555,32 @@ static void nss_close(struct ssl_connect_data *connssl)
 static void Curl_nss_close(struct connectdata *conn, int sockindex)
 {
   struct ssl_connect_data *connssl = &conn->ssl[sockindex];
+#ifndef CURL_DISABLE_PROXY
   struct ssl_connect_data *connssl_proxy = &conn->proxy_ssl[sockindex];
+#endif
   struct ssl_backend_data *backend = connssl->backend;
 
-  if(backend->handle || connssl_proxy->backend->handle) {
+  if(backend->handle
+#ifndef CURL_DISABLE_PROXY
+    || connssl_proxy->backend->handle
+#endif
+    ) {
     /* NSS closes the socket we previously handed to it, so we must mark it
        as closed to avoid double close */
     fake_sclose(conn->sock[sockindex]);
     conn->sock[sockindex] = CURL_SOCKET_BAD;
   }
 
+#ifndef CURL_DISABLE_PROXY
   if(backend->handle)
     /* nss_close(connssl) will transitively close also
        connssl_proxy->backend->handle if both are used. Clear it to avoid
        a double close leading to crash. */
     connssl_proxy->backend->handle = NULL;
 
-  nss_close(connssl);
   nss_close(connssl_proxy);
+#endif
+  nss_close(connssl);
 }
 
 /* return true if NSS can provide error code (and possibly msg) for the
@@ -1621,9 +1631,8 @@ static CURLcode nss_load_ca_certificates(struct connectdata *conn,
   if(capath && !capath[0])
     capath = NULL;
 
-  infof(data, "  CAfile: %s\n  CApath: %s\n",
-      cafile ? cafile : "none",
-      capath ? capath : "none");
+  infof(data, " CAfile: %s\n", cafile ? cafile : "none");
+  infof(data, " CApath: %s\n", capath ? capath : "none");
 
   /* load libnssckbi.so if no other trust roots were specified */
   use_trust_module = !cafile && !capath;
@@ -1663,7 +1672,8 @@ static CURLcode nss_load_ca_certificates(struct connectdata *conn,
       if(!dir)
         return CURLE_SSL_CACERT_BADFILE;
 
-      while((entry = PR_ReadDir(dir, PR_SKIP_BOTH | PR_SKIP_HIDDEN))) {
+      while((entry =
+             PR_ReadDir(dir, (PRDirFlags)(PR_SKIP_BOTH | PR_SKIP_HIDDEN)))) {
         char *fullpath = aprintf("%s/%s", capath, entry->name);
         if(!fullpath) {
           PR_CloseDir(dir);
@@ -1828,6 +1838,12 @@ static CURLcode nss_setup_connect(struct connectdata *conn, int sockindex)
   CURLcode result;
   bool second_layer = FALSE;
   SSLVersionRange sslver_supported;
+#ifndef CURL_DISABLE_PROXY
+  const char *hostname = SSL_IS_PROXY() ? conn->http_proxy.host.name :
+    conn->host.name;
+#else
+  const char *hostname = conn->host.name;
+#endif
 
   SSLVersionRange sslver = {
     SSL_LIBRARY_VERSION_TLS_1_0,  /* min */
@@ -1932,9 +1948,11 @@ static CURLcode nss_setup_connect(struct connectdata *conn, int sockindex)
     goto error;
 
   /* not checked yet */
+#ifndef CURL_DISABLE_PROXY
   if(SSL_IS_PROXY())
     data->set.proxy_ssl.certverifyresult = 0;
   else
+#endif
     data->set.ssl.certverifyresult = 0;
 
   if(SSL_BadCertHook(model, BadCertHandler, conn) != SECSuccess)
@@ -1963,14 +1981,15 @@ static CURLcode nss_setup_connect(struct connectdata *conn, int sockindex)
     infof(data, "  CRLfile: %s\n", SSL_SET_OPTION(CRLfile));
   }
 
-  if(SSL_SET_OPTION(cert)) {
-    char *nickname = dup_nickname(data, SSL_SET_OPTION(cert));
+  if(SSL_SET_OPTION(primary.clientcert)) {
+    char *nickname = dup_nickname(data, SSL_SET_OPTION(primary.clientcert));
     if(nickname) {
       /* we are not going to use libnsspem.so to read the client cert */
       backend->obj_clicert = NULL;
     }
     else {
-      CURLcode rv = cert_stuff(conn, sockindex, SSL_SET_OPTION(cert),
+      CURLcode rv = cert_stuff(conn, sockindex,
+                               SSL_SET_OPTION(primary.clientcert),
                                SSL_SET_OPTION(key));
       if(rv) {
         /* failf() is already done in cert_stuff() */
@@ -1991,12 +2010,14 @@ static CURLcode nss_setup_connect(struct connectdata *conn, int sockindex)
     goto error;
   }
 
+#ifndef CURL_DISABLE_PROXY
   if(conn->proxy_ssl[sockindex].use) {
     DEBUGASSERT(ssl_connection_complete == conn->proxy_ssl[sockindex].state);
     DEBUGASSERT(conn->proxy_ssl[sockindex].backend->handle != NULL);
     nspr_io = conn->proxy_ssl[sockindex].backend->handle;
     second_layer = TRUE;
   }
+#endif
   else {
     /* wrap OS file descriptor by NSPR's file descriptor abstraction */
     nspr_io = PR_ImportTCPSocket(sockfd);
@@ -2077,8 +2098,11 @@ static CURLcode nss_setup_connect(struct connectdata *conn, int sockindex)
     unsigned char protocols[128];
 
 #ifdef USE_NGHTTP2
-    if(data->set.httpversion >= CURL_HTTP_VERSION_2 &&
-       (!SSL_IS_PROXY() || !conn->bits.tunnel_proxy)) {
+    if(data->set.httpversion >= CURL_HTTP_VERSION_2
+#ifndef CURL_DISABLE_PROXY
+      && (!SSL_IS_PROXY() || !conn->bits.tunnel_proxy)
+#endif
+      ) {
       protocols[cur++] = NGHTTP2_PROTO_VERSION_ID_LEN;
       memcpy(&protocols[cur], NGHTTP2_PROTO_VERSION_ID,
           NGHTTP2_PROTO_VERSION_ID_LEN);
@@ -2101,14 +2125,11 @@ static CURLcode nss_setup_connect(struct connectdata *conn, int sockindex)
     goto error;
 
   /* propagate hostname to the TLS layer */
-  if(SSL_SetURL(backend->handle, SSL_IS_PROXY() ? conn->http_proxy.host.name :
-                conn->host.name) != SECSuccess)
+  if(SSL_SetURL(backend->handle, hostname) != SECSuccess)
     goto error;
 
   /* prevent NSS from re-using the session for a different hostname */
-  if(SSL_SetSockPeerID(backend->handle, SSL_IS_PROXY() ?
-                       conn->http_proxy.host.name : conn->host.name)
-     != SECSuccess)
+  if(SSL_SetSockPeerID(backend->handle, hostname) != SECSuccess)
     goto error;
 
   return CURLE_OK;
@@ -2127,11 +2148,17 @@ static CURLcode nss_do_connect(struct connectdata *conn, int sockindex)
   struct Curl_easy *data = conn->data;
   CURLcode result = CURLE_SSL_CONNECT_ERROR;
   PRUint32 timeout;
+#ifndef CURL_DISABLE_PROXY
   long * const certverifyresult = SSL_IS_PROXY() ?
     &data->set.proxy_ssl.certverifyresult : &data->set.ssl.certverifyresult;
   const char * const pinnedpubkey = SSL_IS_PROXY() ?
               data->set.str[STRING_SSL_PINNEDPUBLICKEY_PROXY] :
               data->set.str[STRING_SSL_PINNEDPUBLICKEY_ORIG];
+#else
+  long * const certverifyresult = &data->set.ssl.certverifyresult;
+  const char * const pinnedpubkey =
+              data->set.str[STRING_SSL_PINNEDPUBLICKEY_ORIG];
+#endif
 
 
   /* check timeout situation */

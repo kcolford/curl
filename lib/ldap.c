@@ -150,6 +150,7 @@ const struct Curl_handler Curl_handler_ldap = {
   ZERO_NULL,                            /* connection_check */
   PORT_LDAP,                            /* defport */
   CURLPROTO_LDAP,                       /* protocol */
+  CURLPROTO_LDAP,                       /* family */
   PROTOPT_NONE                          /* flags */
 };
 
@@ -176,6 +177,7 @@ const struct Curl_handler Curl_handler_ldaps = {
   ZERO_NULL,                            /* connection_check */
   PORT_LDAPS,                           /* defport */
   CURLPROTO_LDAPS,                      /* protocol */
+  CURLPROTO_LDAP,                       /* family */
   PROTOPT_SSL                           /* flags */
 };
 #endif
@@ -883,7 +885,7 @@ static int _ldap_url_parse2(const struct connectdata *conn, LDAPURLDesc *ludp)
     LDAP_TRACE(("DN '%s'\n", dn));
 
     /* Unescape the DN */
-    result = Curl_urldecode(conn->data, dn, 0, &unescaped, NULL, FALSE);
+    result = Curl_urldecode(conn->data, dn, 0, &unescaped, NULL, REJECT_ZERO);
     if(result) {
       rc = LDAP_NO_MEMORY;
 
@@ -949,7 +951,7 @@ static int _ldap_url_parse2(const struct connectdata *conn, LDAPURLDesc *ludp)
 
       /* Unescape the attribute */
       result = Curl_urldecode(conn->data, attributes[i], 0, &unescaped, NULL,
-                              FALSE);
+                              REJECT_ZERO);
       if(result) {
         free(attributes);
 
@@ -1018,7 +1020,8 @@ static int _ldap_url_parse2(const struct connectdata *conn, LDAPURLDesc *ludp)
     LDAP_TRACE(("filter '%s'\n", filter));
 
     /* Unescape the filter */
-    result = Curl_urldecode(conn->data, filter, 0, &unescaped, NULL, FALSE);
+    result = Curl_urldecode(conn->data, filter, 0, &unescaped, NULL,
+                            REJECT_ZERO);
     if(result) {
       rc = LDAP_NO_MEMORY;
 

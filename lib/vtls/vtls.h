@@ -113,12 +113,6 @@ CURLcode Curl_none_md5sum(unsigned char *input, size_t inputlen,
 #define MAX_PINNED_PUBKEY_SIZE 1048576 /* 1MB */
 #endif
 
-#ifndef MD5_DIGEST_LENGTH
-#ifndef LIBWOLFSSL_VERSION_HEX /* because WolfSSL borks this */
-#define MD5_DIGEST_LENGTH 16 /* fixed size */
-#endif
-#endif
-
 #ifndef CURL_SHA256_DIGEST_LENGTH
 #define CURL_SHA256_DIGEST_LENGTH 32 /* fixed size */
 #endif
@@ -227,7 +221,7 @@ CURLcode Curl_ssl_addsessionid(struct connectdata *conn,
  * take sessionid object ownership from sessionid cache
  * (e.g. decrement refcount).
  */
-void Curl_ssl_kill_session(struct curl_ssl_session *session);
+void Curl_ssl_kill_session(struct Curl_ssl_session *session);
 /* delete a session from the cache
  * Sessionid mutex must be locked (see Curl_ssl_sessionid_lock).
  * This will call engine-specific curlssl_session_free function, which must

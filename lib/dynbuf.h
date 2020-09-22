@@ -22,8 +22,24 @@
  *
  ***************************************************************************/
 
+#ifndef BUILDING_LIBCURL
+/* this renames the functions so that the tool code can use the same code
+   without getting symbol collisions */
+#define Curl_dyn_init(a,b) curlx_dyn_init(a,b)
+#define Curl_dyn_add(a,b) curlx_dyn_add(a,b)
+#define Curl_dyn_addn(a,b,c) curlx_dyn_addn(a,b,c)
+#define Curl_dyn_addf curlx_dyn_addf
+#define Curl_dyn_free(a) curlx_dyn_free(a)
+#define Curl_dyn_ptr(a) curlx_dyn_ptr(a)
+#define Curl_dyn_uptr(a) curlx_dyn_uptr(a)
+#define Curl_dyn_len(a) curlx_dyn_len(a)
+#define Curl_dyn_reset(a) curlx_dyn_reset(a)
+#define Curl_dyn_tail(a,b) curlx_dyn_tail(a,b)
+#define curlx_dynbuf dynbuf /* for the struct name */
+#endif
+
 struct dynbuf {
-  char *bufr;    /* point to a zero terminated allocated buffer */
+  char *bufr;    /* point to a null-terminated allocated buffer */
   size_t leng;   /* number of bytes *EXCLUDING* the zero terminator */
   size_t allc;   /* size of the current allocation */
   size_t toobig; /* size limit for the buffer */
@@ -53,11 +69,11 @@ size_t Curl_dyn_len(const struct dynbuf *s);
 #define DYN_HAXPROXY        2048
 #define DYN_HTTP_REQUEST    (128*1024)
 #define DYN_H2_HEADERS      (128*1024)
-#define DYN_H2_TRAILER      4096
+#define DYN_H2_TRAILERS     (128*1024)
 #define DYN_APRINTF         8000000
 #define DYN_RTSP_REQ_HEADER (64*1024)
 #define DYN_TRAILERS        (64*1024)
 #define DYN_PROXY_CONNECT_HEADERS 16384
 #define DYN_QLOG_NAME       1024
-#define DYN_H1_TRAILER      DYN_H2_TRAILER
+#define DYN_H1_TRAILER      4096
 #endif

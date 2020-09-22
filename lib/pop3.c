@@ -128,6 +128,7 @@ const struct Curl_handler Curl_handler_pop3 = {
   ZERO_NULL,                        /* connection_check */
   PORT_POP3,                        /* defport */
   CURLPROTO_POP3,                   /* protocol */
+  CURLPROTO_POP3,                   /* family */
   PROTOPT_CLOSEACTION | PROTOPT_NOURLQUERY | /* flags */
   PROTOPT_URLOPTIONS
 };
@@ -155,6 +156,7 @@ const struct Curl_handler Curl_handler_pop3s = {
   ZERO_NULL,                        /* connection_check */
   PORT_POP3S,                       /* defport */
   CURLPROTO_POP3S,                  /* protocol */
+  CURLPROTO_POP3,                   /* family */
   PROTOPT_CLOSEACTION | PROTOPT_SSL
   | PROTOPT_NOURLQUERY | PROTOPT_URLOPTIONS /* flags */
 };
@@ -1390,7 +1392,7 @@ static CURLcode pop3_parse_url_path(struct connectdata *conn)
   const char *path = &data->state.up.path[1]; /* skip leading path */
 
   /* URL decode the path for the message ID */
-  return Curl_urldecode(data, path, 0, &pop3->id, NULL, TRUE);
+  return Curl_urldecode(data, path, 0, &pop3->id, NULL, REJECT_CTRL);
 }
 
 /***********************************************************************
@@ -1408,7 +1410,7 @@ static CURLcode pop3_parse_custom_request(struct connectdata *conn)
 
   /* URL decode the custom request */
   if(custom)
-    result = Curl_urldecode(data, custom, 0, &pop3->custom, NULL, TRUE);
+    result = Curl_urldecode(data, custom, 0, &pop3->custom, NULL, REJECT_CTRL);
 
   return result;
 }

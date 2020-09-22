@@ -21,6 +21,25 @@ variables are substituted by the their respective contents and the output
 version of the test file is stored as `log/testNUM`. That version is what will
 be read and used by the test servers.
 
+## Base64 Encoding
+
+In the preprocess stage, a special instruction can be used to have runtests.pl
+base64 encode a certain section and insert in the generated output file. This
+is in particular good for test cases where the test tool is expected to pass
+in base64 encoded content that might use dynamic information that is unique
+for this particular test invocation, like the server port number.
+
+To insert a base64 encoded string into the output, use this syntax:
+
+    %b64[ data to encode ]b64%
+
+The data to encode can then use any of the existing variables mentioned below,
+or even percent-encoded individual bytes. As an example, insert the HTTP
+server's port number (in ASCII) followed by a space and the hexadecimal byte
+9a:
+
+    %b64[%HTTPPORT %9a]b64%
+
 # Variables
 
 When the test is preprocessed, a range of "variables" in the test file will be
@@ -44,6 +63,7 @@ Available substitute variables include:
 - `%HOSTIP` - IPv4 address of the host running this test
 - `%HTTP6PORT` - IPv6 port number of the HTTP server
 - `%HTTPPORT` - Port number of the HTTP server
+- `%HTTP2PORT` - Port number of the HTTP/2 server
 - `%HTTPSPORT` - Port number of the HTTPS server
 - `%HTTPSPROXYPORT` - Port number of the HTTPS-proxy
 - `%HTTPTLS6PORT` - IPv6 port number of the HTTP TLS server
@@ -52,7 +72,7 @@ Available substitute variables include:
 - `%IMAP6PORT` - IPv6 port number of the IMAP server
 - `%IMAPPORT` - Port number of the IMAP server
 - `%MQTTPORT` - Port number of the MQTT server
-- `%NEGTELNETPORT` - Port number of the telnet server
+- `%TELNETPORT` - Port number of the telnet server
 - `%NOLISTENPORT` - Port number where no service is listening
 - `%POP36PORT` - IPv6 port number of the POP3 server
 - `%POP3PORT` - Port number of the POP3 server
@@ -308,6 +328,7 @@ Features testable here are:
 - `parsedate`
 - `proxy`
 - `PSL`
+- `Schannel`
 - `shuffle-dns`
 - `socks`
 - `SPNEGO`
@@ -322,7 +343,6 @@ Features testable here are:
 - `unix-sockets`
 - `verbose-strings`
 - `win32`
-- `WinSSL`
 
 as well as each protocol that curl supports.  A protocol only needs to be
 specified if it is different from the server (useful when the server
@@ -360,7 +380,7 @@ Brief test case description, shown when the test runs.
 Set the given environment variables to the specified value before the actual
 command is run. They are cleared again after the command has been run.
 
-### `<command [option="no-output/no-include/force-output/binary-trace"] [timeout="secs"][delay="secs"][type="perl"]>`
+### `<command [option="no-output/no-include/force-output/binary-trace"] [timeout="secs"][delay="secs"][type="perl/shell"]>`
 Command line to run.
 
 Note that the URL that gets passed to the server actually controls what data
@@ -376,6 +396,9 @@ hexadecimal group in the address will be used as the test number! For example
 the address "[1234::ff]" would be treated as test case 255.
 
 Set `type="perl"` to write the test case as a perl script. It implies that
+there's no memory debugging and valgrind gets shut off for this test.
+
+Set `type="shell"` to write the test case as a shell script. It implies that
 there's no memory debugging and valgrind gets shut off for this test.
 
 Set `option="no-output"` to prevent the test script to slap on the `--output`
@@ -405,9 +428,12 @@ parameter is the not negative integer number of seconds for the delay. This
 'delay' attribute is intended for very specific test cases, and normally not
 needed.
 
-### `<file name="log/filename">`
+### `<file name="log/filename" [nonewline="yes"]>`
 This creates the named file with this content before the test case is run,
 which is useful if the test case needs a file to act on.
+
+If 'nonewline="yes"` is used, the created file will have the final newline
+stripped off.
 
 ### `<stdin [nonewline="yes"]>`
 Pass this given data on stdin to the tool.
@@ -443,6 +469,15 @@ The protocol dump curl should transmit to a HTTP proxy (when the http-proxy
 server is used), if 'nonewline' is set, we will cut off the trailing newline
 of this given data before comparing with the one actually sent by the client
 The `<strip>` and `<strippart>` rules are applied before comparisons are made.
+
+### `<stderr [mode="text"] [nonewline="yes"]>`
+This verifies that this data was passed to stderr.
+
+Use the mode="text" attribute if the output is in text mode on platforms that
+have a text/binary difference.
+
+If 'nonewline' is set, we will cut off the trailing newline of this given data
+before comparing with the one actually received by the client
 
 ### `<stdout [mode="text"] [nonewline="yes"]>`
 This verifies that this data was passed to stdout.

@@ -132,6 +132,7 @@ const struct Curl_handler Curl_handler_imap = {
   ZERO_NULL,                        /* connection_check */
   PORT_IMAP,                        /* defport */
   CURLPROTO_IMAP,                   /* protocol */
+  CURLPROTO_IMAP,                   /* family */
   PROTOPT_CLOSEACTION|              /* flags */
   PROTOPT_URLOPTIONS
 };
@@ -159,6 +160,7 @@ const struct Curl_handler Curl_handler_imaps = {
   ZERO_NULL,                        /* connection_check */
   PORT_IMAPS,                       /* defport */
   CURLPROTO_IMAPS,                  /* protocol */
+  CURLPROTO_IMAP,                   /* family */
   PROTOPT_CLOSEACTION | PROTOPT_SSL | /* flags */
   PROTOPT_URLOPTIONS
 };
@@ -1176,6 +1178,9 @@ static CURLcode imap_state_fetch_resp(struct connectdata *conn, int imapcode,
     else {
       /* IMAP download */
       data->req.maxdownload = size;
+      /* force a recv/send check of this connection, as the data might've been
+       read off the socket already */
+      data->conn->cselect_bits = CURL_CSELECT_IN;
       Curl_setup_transfer(data, FIRSTSOCKET, size, FALSE, -1);
     }
   }
@@ -1957,7 +1962,7 @@ static CURLcode imap_parse_url_path(struct connectdata *conn)
       end--;
 
     result = Curl_urldecode(data, begin, end - begin, &imap->mailbox, NULL,
-                            TRUE);
+                            REJECT_CTRL);
     if(result)
       return result;
   }
@@ -1979,7 +1984,8 @@ static CURLcode imap_parse_url_path(struct connectdata *conn)
       return CURLE_URL_MALFORMAT;
 
     /* Decode the name parameter */
-    result = Curl_urldecode(data, begin, ptr - begin, &name, NULL, TRUE);
+    result = Curl_urldecode(data, begin, ptr - begin, &name, NULL,
+                            REJECT_CTRL);
     if(result)
       return result;
 
@@ -1989,7 +1995,8 @@ static CURLcode imap_parse_url_path(struct connectdata *conn)
       ptr++;
 
     /* Decode the value parameter */
-    result = Curl_urldecode(data, begin, ptr - begin, &value, &valuelen, TRUE);
+    result = Curl_urldecode(data, begin, ptr - begin, &value, &valuelen,
+                            REJECT_CTRL);
     if(result) {
       free(name);
       return result;
@@ -2077,7 +2084,7 @@ static CURLcode imap_parse_custom_request(struct connectdata *conn)
 
   if(custom) {
     /* URL decode the custom request */
-    result = Curl_urldecode(data, custom, 0, &imap->custom, NULL, TRUE);
+    result = Curl_urldecode(data, custom, 0, &imap->custom, NULL, REJECT_CTRL);
 
     /* Extract the parameters if specified */
     if(!result) {

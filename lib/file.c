@@ -67,8 +67,7 @@
 #include "curl_memory.h"
 #include "memdebug.h"
 
-#if defined(WIN32) || defined(MSDOS) || defined(__EMX__) || \
-  defined(__SYMBIAN32__)
+#if defined(WIN32) || defined(MSDOS) || defined(__EMX__)
 #define DOS_FILESYSTEM 1
 #endif
 
@@ -112,6 +111,7 @@ const struct Curl_handler Curl_handler_file = {
   ZERO_NULL,                            /* connection_check */
   0,                                    /* defport */
   CURLPROTO_FILE,                       /* protocol */
+  CURLPROTO_FILE,                       /* family */
   PROTOPT_NONETWORK | PROTOPT_NOURLQUERY /* flags */
 };
 
@@ -144,7 +144,7 @@ static CURLcode file_connect(struct connectdata *conn, bool *done)
   size_t real_path_len;
 
   CURLcode result = Curl_urldecode(data, data->state.up.path, 0, &real_path,
-                                   &real_path_len, FALSE);
+                                   &real_path_len, REJECT_ZERO);
   if(result)
     return result;
 

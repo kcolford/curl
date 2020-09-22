@@ -90,7 +90,8 @@ const struct Curl_handler Curl_handler_dict = {
   ZERO_NULL,                            /* connection_check */
   PORT_DICT,                            /* defport */
   CURLPROTO_DICT,                       /* protocol */
-  PROTOPT_NONE | PROTOPT_NOURLQUERY      /* flags */
+  CURLPROTO_DICT,                       /* family */
+  PROTOPT_NONE | PROTOPT_NOURLQUERY     /* flags */
 };
 
 static char *unescape_word(struct Curl_easy *data, const char *inputbuff)
@@ -99,7 +100,8 @@ static char *unescape_word(struct Curl_easy *data, const char *inputbuff)
   char *dictp;
   size_t len;
 
-  CURLcode result = Curl_urldecode(data, inputbuff, 0, &newp, &len, FALSE);
+  CURLcode result = Curl_urldecode(data, inputbuff, 0, &newp, &len,
+                                   REJECT_NADA);
   if(!newp || result)
     return NULL;
 
